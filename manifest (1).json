@@ -1,0 +1,14 @@
+{
+  "background_color": "#4b7843",
+  "dir": "ltr",
+  "display": "fullscreen",
+  "name": "alpha cricket",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "alpha cricket",
+  "start_url": "/https://nifty-hubble-alpha.vercel.app/",
+  "theme_color": "#6db064",
+  "id": "alpha_cricket",
+  "description": "good game of cricket",
+  "lang": "en"
+}
