@@ -1,0 +1,29 @@
+{
+  "name": "cricket-doodle-arcade",
+  "version": "1.0.0",
+  "description": "Cricket Doodle Arcade - Mobile Game",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve -l 8080",
+    "cap:init": "npx cap init",
+    "cap:add": "npx cap add android",
+    "cap:sync": "npx cap sync",
+    "cap:open": "npx cap open android"
+  },
+  "keywords": [
+    "cricket",
+    "game",
+    "doodle",
+    "mobile",
+    "playstore",
+    "pwa",
+    "capacitor"
+  ],
+  "author": "Dhaval Rajput",
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/core": "^6.0.0"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "appId": "com.dhavalrajput.cricketdoodle",
+  "appName": "Cricket Doodle Arcade",
+  "webDir": ".",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "backgroundColor": "#e8f0e0"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1000,
+      "backgroundColor": "#e8f0e0"
+    }
+  }
+}

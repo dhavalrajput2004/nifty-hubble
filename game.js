@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-//  🏏  CRICKET DOODLE — Google-Doodle-style timing-based batting
+//  🏏  CRICKET DOODLE — Mobile & Desktop Responsive Arcade Engine
 //  Everything on a single <canvas>. Click / Tap / Space to bat.
 //  Core mechanic: Timing Meter with oscillating needle.
 // ═══════════════════════════════════════════════════════════════
@@ -7,18 +7,41 @@
 (function () {
   'use strict';
 
-  /* ─── Canvas ─────────────────────────────────────────────── */
+  /* ─── Canvas & High-DPI Mobile Scaling ────────────────────── */
   const canvas = document.getElementById('gameCanvas');
   const ctx    = canvas.getContext('2d');
   const W = 800, H = 520;
-  canvas.width = W; canvas.height = H;
+  const ASPECT_RATIO = W / H;
 
   function resize() {
-    const r = Math.min(window.innerWidth / W, window.innerHeight / H, 1.3);
-    canvas.style.width  = (W * r) + 'px';
-    canvas.style.height = (H * r) + 'px';
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const container = document.getElementById('app-container');
+    const availWidth = container ? container.clientWidth : window.innerWidth;
+    const availHeight = container ? container.clientHeight : window.innerHeight;
+
+    let displayW = availWidth;
+    let displayH = availWidth / ASPECT_RATIO;
+
+    if (displayH > availHeight) {
+      displayH = availHeight;
+      displayW = availHeight * ASPECT_RATIO;
+    }
+
+    // High-DPI physical resolution
+    canvas.width = Math.floor(W * dpr);
+    canvas.height = Math.floor(H * dpr);
+
+    // CSS Display dimensions
+    canvas.style.width = Math.floor(displayW) + 'px';
+    canvas.style.height = Math.floor(displayH) + 'px';
+
+    // Scale canvas context to logical (800x520) resolution
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset
+    ctx.scale((canvas.width / W), (canvas.height / H));
   }
+
   window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => setTimeout(resize, 200));
   resize();
 
   /* ─── Palette ────────────────────────────────────────────── */
@@ -63,14 +86,11 @@
   }
   // Sound library
   function sfxCrack() {
-    // Bat crack: layered noise burst + low thump
     tone(320, 0.07, 'triangle', 0.7);
     tone(140, 0.12, 'triangle', 0.5);
-    // Noise burst via rapid oscillator
     tone(2200, 0.03, 'sawtooth', 0.15);
   }
   function sfxCheerSix() {
-    // Rising triumphant arpeggio
     [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, 0.18, 'sine', 0.28), i * 70));
   }
   function sfxCheerFour() {
@@ -88,7 +108,7 @@
   const PITCH_BOT    = 430;
   const BATSMAN_X    = 400;
   const BATSMAN_Y    = GROUND_Y;
-  const METER_Y      = H - 38;      // Timing meter vertical position
+  const METER_Y      = H - 38;
   const METER_W      = 320;
   const METER_H      = 18;
   const METER_X      = (W - METER_W) / 2;
@@ -104,26 +124,23 @@
   let shakeTimer  = 0;
   let shakeIntensity = 0;
   let frame       = 0;
-  let difficulty  = 1;        // increases with score
+  let difficulty  = 1;
 
   /* ─── Timing Meter ───────────────────────────────────────── */
   const meter = {
-    pos: 0,          // 0..1 normalised needle position
-    dir: 1,          // +1 or -1
-    speed: 0.018,    // base speed (increases with difficulty)
+    pos: 0,
+    dir: 1,
+    speed: 0.018,
     active: false,
-    frozenPos: -1,   // where needle froze on hit (-1 = not frozen)
+    frozenPos: -1,
     frozenTimer: 0,
   };
 
-  // Zone boundaries (fraction of bar width):
-  //  [0..0.15] BAD | [0.15..0.32] GOOD | [0.32..0.50] PERFECT | mirror
-  // Symmetrical: center = perfect
-  const ZONE_PERFECT = 0.14;   // half-width of perfect zone
-  const ZONE_GOOD    = 0.28;   // half-width of good zone (includes perfect)
+  const ZONE_PERFECT = 0.14;
+  const ZONE_GOOD    = 0.28;
 
   function getMeterZone(pos) {
-    const d = Math.abs(pos - 0.5);  // distance from center
+    const d = Math.abs(pos - 0.5);
     if (d <= ZONE_PERFECT) return 'PERFECT';
     if (d <= ZONE_GOOD)    return 'GOOD';
     return 'BAD';
@@ -137,18 +154,18 @@
     active: false,
     hit: false,
     trail: [],
-    squash: 1,       // 1 = normal, <1 = squashed, >1 = stretched
+    squash: 1,
     bounced: false,
     bounceY: 0,
-    shadowScale: 1,  // grows as ball "rises" for depth
-    heightOffset: 0, // visual height above ground shadow
+    shadowScale: 1,
+    heightOffset: 0,
   };
 
   /* ─── Bowler ─────────────────────────────────────────────── */
   const bowler = {
     baseY: PITCH_TOP + 10,
     runY: 0,
-    phase: 'IDLE',   // IDLE | RUNNING | DELIVERING | DONE
+    phase: 'IDLE',
     armAngle: 0,
     deliveryFrame: 0,
   };
@@ -162,7 +179,7 @@
     impactFlash: 0,
   };
 
-  /* ─── Fielders (2-3, charming) ───────────────────────────── */
+  /* ─── Fielders ───────────────────────────────────────────── */
   const fielderDefs = [
     { homeX: 180, homeY: 200, jersey: C.red },
     { homeX: 620, homeY: 200, jersey: C.red },
@@ -188,13 +205,10 @@
   /* ─── Helpers ────────────────────────────────────────────── */
   function lerp(a, b, t) { return a + (b - a) * t; }
   function rand(lo, hi)  { return lo + Math.random() * (hi - lo); }
-  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-  // Easing: cubic ease-in-out
   function easeInOutCubic(t) {
     return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
   }
-  // Spring overshoot for floating text
   function springEase(t) {
     const c4 = (2 * Math.PI) / 3;
     return t === 0 ? 0 : t === 1 ? 1
@@ -205,7 +219,6 @@
      DRAWING FUNCTIONS
      ═══════════════════════════════════════════════════════════ */
 
-  /* ─── Sky ────────────────────────────────────────────────── */
   function drawSky() {
     const g = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
     g.addColorStop(0, C.skyTop);
@@ -214,7 +227,6 @@
     ctx.fillRect(0, 0, W, GROUND_Y);
   }
 
-  /* ─── Clouds ─────────────────────────────────────────────── */
   function drawClouds() {
     ctx.fillStyle = C.white;
     clouds.forEach(c => {
@@ -228,17 +240,13 @@
     });
   }
 
-  /* ─── Ground ─────────────────────────────────────────────── */
   function drawGround() {
-    // Base grass
     ctx.fillStyle = C.grass1;
     ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
-    // Mowing stripes
     ctx.fillStyle = C.grass2;
     for (let y = GROUND_Y; y < H; y += 20) {
       ctx.fillRect(0, y, W, 10);
     }
-    // Boundary rope — white dashed ellipse
     ctx.strokeStyle = C.white;
     ctx.lineWidth = 3;
     ctx.setLineDash([10, 7]);
@@ -248,7 +256,6 @@
     ctx.setLineDash([]);
   }
 
-  /* ─── Pitch ──────────────────────────────────────────────── */
   function drawPitch() {
     ctx.fillStyle = C.pitch;
     ctx.strokeStyle = C.outline;
@@ -261,15 +268,12 @@
     ctx.closePath();
     ctx.fill(); ctx.stroke();
 
-    // Crease lines
     ctx.strokeStyle = C.pitchLine;
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(374, PITCH_TOP + 28); ctx.lineTo(426, PITCH_TOP + 28); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(360, GROUND_Y + 8);  ctx.lineTo(440, GROUND_Y + 8);  ctx.stroke();
 
-    // Stumps — bowler end (small)
     drawStumps(400, PITCH_TOP + 6, 0.55);
-    // Stumps — batsman end (larger)
     drawStumps(400, PITCH_BOT - 6, 0.95);
   }
 
@@ -282,12 +286,10 @@
       ctx.fillRect(sx, y - sh, sw, sh);
       ctx.strokeRect(sx, y - sh, sw, sh);
     }
-    // Bails
     ctx.fillStyle = C.yellow;
     ctx.fillRect(x - gap - sw, y - sh, gap * 2 + sw * 2, 3 * s);
   }
 
-  /* ─── Shadow helper ──────────────────────────────────────── */
   function drawShadow(x, y, rx, ry) {
     ctx.fillStyle = C.shadow;
     ctx.beginPath();
@@ -295,7 +297,6 @@
     ctx.fill();
   }
 
-  /* ─── Person (cute doodle figure) ────────────────────────── */
   function drawPerson(x, y, jersey, scale, flipX, armA, diving) {
     const s = scale || 1;
     ctx.save();
@@ -304,50 +305,41 @@
 
     drawShadow(0, 14, 12, 4);
 
-    // Legs
     ctx.strokeStyle = C.outline; ctx.lineWidth = 3;
     const legSpread = diving ? 8 : 0;
     ctx.beginPath(); ctx.moveTo(-4, 2);  ctx.lineTo(-6 - legSpread, 14); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(4, 2);   ctx.lineTo(6 + legSpread, 14);  ctx.stroke();
 
-    // Shoes
     ctx.fillStyle = C.outline;
     ctx.beginPath(); ctx.ellipse(-6 - legSpread, 15, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(6 + legSpread, 15, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
 
-    // Body
     ctx.fillStyle = jersey;
     ctx.strokeStyle = C.outline; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.ellipse(0, -5, 12, 13, 0, 0, Math.PI * 2);
     ctx.fill(); ctx.stroke();
 
-    // Arms
     const aa = armA || 0;
     ctx.strokeStyle = C.skin; ctx.lineWidth = 3.5;
     ctx.beginPath(); ctx.moveTo(-11, -8); ctx.lineTo(-17 + (diving ? -8 : 0), -8 + Math.sin(aa) * 10); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(11, -8);  ctx.lineTo(17 + (diving ? 8 : 0), -8 + Math.sin(-aa) * 10); ctx.stroke();
 
-    // Head
     ctx.fillStyle = C.skin; ctx.strokeStyle = C.outline; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(0, -22, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
 
-    // Eyes
     ctx.fillStyle = C.outline;
     ctx.beginPath(); ctx.arc(-3, -23, 1.8, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(4, -23, 1.8, 0, Math.PI * 2);  ctx.fill();
 
-    // Smile
     ctx.strokeStyle = C.outline; ctx.lineWidth = 1.4;
     ctx.beginPath(); ctx.arc(0, -20, 3.5, 0.15, Math.PI - 0.15); ctx.stroke();
 
-    // Cap
     ctx.fillStyle = jersey; ctx.strokeStyle = C.outline; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.ellipse(0, -28, 11, 4.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
 
     ctx.restore();
   }
 
-  /* ─── Batsman ────────────────────────────────────────────── */
   function drawBatsman() {
     const x = BATSMAN_X, y = BATSMAN_Y;
     const bob = Math.sin(bat.idleBob) * 1.2;
@@ -355,7 +347,6 @@
     ctx.save();
     ctx.translate(x, y + bob);
 
-    // Impact flash glow
     if (bat.impactFlash > 0) {
       ctx.globalAlpha = bat.impactFlash * 0.4;
       ctx.fillStyle = C.yellow;
@@ -365,31 +356,25 @@
 
     drawShadow(0, 18, 16, 5);
 
-    // Pads
     ctx.fillStyle = C.white; ctx.strokeStyle = C.outline; ctx.lineWidth = 1.8;
     ctx.beginPath(); ctx.roundRect(-10, 0, 8, 18, 2); ctx.fill(); ctx.stroke();
     ctx.beginPath(); ctx.roundRect(2, 0, 8, 18, 2);   ctx.fill(); ctx.stroke();
 
-    // Shoes
     ctx.fillStyle = C.outline;
     ctx.beginPath(); ctx.ellipse(-6, 19, 6, 3.5, 0, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(6, 19, 6, 3.5, 0, 0, Math.PI * 2);  ctx.fill();
 
-    // Body
     ctx.fillStyle = C.blue; ctx.strokeStyle = C.outline; ctx.lineWidth = 2.2;
     ctx.beginPath(); ctx.ellipse(0, -8, 14, 15, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
 
-    // Jersey number
     ctx.fillStyle = C.white; ctx.font = 'bold 11px Nunito'; ctx.textAlign = 'center';
     ctx.fillText('18', 0, -3);
 
-    // Left arm (glove, static)
     ctx.strokeStyle = C.skin; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(-13, -12); ctx.lineTo(-21, -2); ctx.stroke();
     ctx.fillStyle = C.yellow;
     ctx.beginPath(); ctx.arc(-21, -1, 4, 0, Math.PI * 2); ctx.fill();
 
-    // ── BAT + right arm ──
     ctx.save();
     ctx.translate(13, -12);
 
@@ -401,23 +386,18 @@
     }
     ctx.rotate(batAngle);
 
-    // Upper arm
     ctx.strokeStyle = C.skin; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 11); ctx.stroke();
-    // Glove
     ctx.fillStyle = C.yellow;
     ctx.beginPath(); ctx.arc(0, 12, 3.5, 0, Math.PI * 2); ctx.fill();
 
-    // Bat handle
     ctx.fillStyle = C.batHandle; ctx.strokeStyle = C.outline; ctx.lineWidth = 1.4;
     ctx.beginPath(); ctx.roundRect(-2.5, 12, 5, 11, 2); ctx.fill(); ctx.stroke();
 
-    // Bat blade — with squash/stretch during swing
     let bw = 10, bh = 20;
     if (bat.swinging) {
       const t = bat.swingT;
       if (t > 0.3 && t < 0.6) {
-        // Impact zone: stretch width, squash height
         const s = Math.sin((t - 0.3) / 0.3 * Math.PI);
         bw = 10 + s * 4;
         bh = 20 - s * 4;
@@ -425,32 +405,26 @@
     }
     ctx.fillStyle = C.batWood; ctx.strokeStyle = C.outline; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.roundRect(-bw / 2, 23, bw, bh, [2, 2, 4, 4]); ctx.fill(); ctx.stroke();
-    // V-line
     ctx.strokeStyle = C.stumpEdge; ctx.lineWidth = 0.8;
     ctx.beginPath(); ctx.moveTo(0, 26); ctx.lineTo(0, 23 + bh - 3); ctx.stroke();
 
-    ctx.restore(); // bat pivot
+    ctx.restore();
 
-    // Head
     ctx.fillStyle = C.skin; ctx.strokeStyle = C.outline; ctx.lineWidth = 2.2;
     ctx.beginPath(); ctx.arc(0, -28, 12, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
 
-    // Helmet
     ctx.fillStyle = C.blue; ctx.strokeStyle = C.outline; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(0, -31, 13, Math.PI, 0); ctx.fill(); ctx.stroke();
-    // Grill
     ctx.strokeStyle = '#8ab4e8'; ctx.lineWidth = 1.3;
     for (let gx = -6; gx <= 6; gx += 4) {
       ctx.beginPath(); ctx.moveTo(gx, -24); ctx.lineTo(gx, -17); ctx.stroke();
     }
     ctx.beginPath(); ctx.moveTo(-7, -20); ctx.lineTo(7, -20); ctx.stroke();
 
-    // Eyes
     ctx.fillStyle = C.outline;
     ctx.beginPath(); ctx.arc(-4, -28, 1.8, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(4, -28, 1.8, 0, Math.PI * 2);  ctx.fill();
 
-    // Mouth — emotion changes
     ctx.strokeStyle = C.outline; ctx.lineWidth = 1.6;
     if (lastResult === 'OUT' || lastResult === 'BOWLED') {
       ctx.beginPath(); ctx.arc(0, -20, 3, Math.PI + 0.3, -0.3); ctx.stroke();
@@ -463,7 +437,6 @@
     ctx.restore();
   }
 
-  /* ─── Bowler ─────────────────────────────────────────────── */
   function drawBowler() {
     const bx = 400;
     let by = bowler.baseY + bowler.runY;
@@ -480,7 +453,6 @@
     drawPerson(bx, by, C.red, 0.8, false, armA, false);
   }
 
-  /* ─── Fielders ───────────────────────────────────────────── */
   function drawFielders() {
     fielders.forEach((f, i) => {
       f.x = lerp(f.x, f.tx, 0.05);
@@ -499,11 +471,9 @@
     });
   }
 
-  /* ─── Ball with squash/stretch ───────────────────────────── */
   function drawBall() {
     if (!ball.active) return;
 
-    // Trail
     if (ball.trail.length > 1) {
       ctx.strokeStyle = 'rgba(224,64,48,0.2)';
       ctx.lineWidth = 4; ctx.lineCap = 'round';
@@ -512,94 +482,77 @@
       ctx.stroke();
     }
 
-    // Ground shadow (shows depth)
     const shadowY = ball.y + ball.heightOffset;
     const shadowR = ball.radius * ball.shadowScale;
     drawShadow(ball.x, shadowY, shadowR * 1.4, shadowR * 0.4);
 
-    // Ball body (with squash)
     const r = ball.radius;
     const bx = ball.x, by = ball.y;
     const sq = ball.squash;
 
     ctx.save();
     ctx.translate(bx, by);
-    ctx.scale(1 / sq, sq); // squash horizontally = stretch vertically, vice versa
+    ctx.scale(1 / sq, sq);
 
     ctx.fillStyle = C.ballRed;
     ctx.strokeStyle = C.outline;
     ctx.lineWidth = 1.8;
     ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
 
-    // Seam
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 0.9;
     ctx.beginPath(); ctx.arc(0, 0, r * 0.55, -0.9, 0.9); ctx.stroke();
 
-    // Shine
     ctx.fillStyle = C.ballShine;
     ctx.beginPath(); ctx.arc(-r * 0.25, -r * 0.3, r * 0.28, 0, Math.PI * 2); ctx.fill();
 
     ctx.restore();
   }
 
-  /* ─── Timing Meter ───────────────────────────────────────── */
   function drawTimingMeter() {
     if (state !== 'BOWLING' && meter.frozenTimer <= 0) return;
 
     const mx = METER_X, my = METER_Y, mw = METER_W, mh = METER_H;
 
-    // Outer container
     ctx.fillStyle = C.scoreBg;
     ctx.strokeStyle = C.panelStroke;
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.roundRect(mx - 12, my - 22, mw + 24, mh + 36, 12); ctx.fill(); ctx.stroke();
 
-    // Label
     ctx.fillStyle = C.textMuted;
     ctx.font = '700 10px Nunito';
     ctx.textAlign = 'center';
     ctx.fillText('⏱ TIMING', W / 2, my - 8);
 
-    // Zone labels
     ctx.font = '800 8px Nunito';
     ctx.fillStyle = C.meterBad;    ctx.textAlign = 'left';  ctx.fillText('MISS', mx + 4, my - 8);
     ctx.fillStyle = C.meterPerfect; ctx.textAlign = 'center'; ctx.fillText('PERFECT', W / 2, my - 8);
     ctx.fillStyle = C.meterBad;    ctx.textAlign = 'right'; ctx.fillText('MISS', mx + mw - 4, my - 8);
 
-    // Background bar
     ctx.fillStyle = C.meterBg;
     ctx.beginPath(); ctx.roundRect(mx, my, mw, mh, mh / 2); ctx.fill();
 
-    // Zone colors (painted as sections)
     const perfectL = mw * (0.5 - ZONE_PERFECT);
     const perfectR = mw * (0.5 + ZONE_PERFECT);
     const goodL    = mw * (0.5 - ZONE_GOOD);
     const goodR    = mw * (0.5 + ZONE_GOOD);
 
-    // Bad zones (full bar is already bg-colored, paint good & perfect on top)
-    // Good zones
     ctx.fillStyle = C.meterGood;
     ctx.beginPath(); ctx.roundRect(mx + goodL, my + 1, goodR - goodL, mh - 2, (mh - 2) / 2); ctx.fill();
-    // Perfect zone
     ctx.fillStyle = C.meterPerfect;
     ctx.beginPath(); ctx.roundRect(mx + perfectL, my + 1, perfectR - perfectL, mh - 2, (mh - 2) / 2); ctx.fill();
 
-    // Bar outline
     ctx.strokeStyle = C.outline; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.roundRect(mx, my, mw, mh, mh / 2); ctx.stroke();
 
-    // Needle
     const needlePos = meter.frozenTimer > 0 ? meter.frozenPos : meter.pos;
     const nx = mx + needlePos * mw;
 
-    // Needle glow
     const zone = getMeterZone(needlePos);
     if (zone === 'PERFECT') {
       ctx.fillStyle = 'rgba(52,168,83,0.25)';
       ctx.beginPath(); ctx.arc(nx, my + mh / 2, 14, 0, Math.PI * 2); ctx.fill();
     }
 
-    // Needle body (triangle pointer)
     ctx.fillStyle = C.outline;
     ctx.beginPath();
     ctx.moveTo(nx, my - 3);
@@ -608,11 +561,9 @@
     ctx.closePath();
     ctx.fill();
 
-    // Needle line through bar
     ctx.strokeStyle = C.outline; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(nx, my); ctx.lineTo(nx, my + mh); ctx.stroke();
 
-    // Bottom triangle
     ctx.fillStyle = C.outline;
     ctx.beginPath();
     ctx.moveTo(nx, my + mh + 3);
@@ -622,23 +573,19 @@
     ctx.fill();
   }
 
-  /* ─── HUD ────────────────────────────────────────────────── */
   function drawHUD() {
     if (state === 'TITLE' || state === 'GAMEOVER') return;
 
-    // Semi-transparent panel — top left
     ctx.fillStyle = C.scoreBg;
     ctx.strokeStyle = C.panelStroke;
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.roundRect(14, 10, 165, 54, 12); ctx.fill(); ctx.stroke();
 
-    // Score
     ctx.fillStyle = C.textMuted; ctx.font = '800 10px Nunito'; ctx.textAlign = 'left';
     ctx.fillText('SCORE', 26, 26);
     ctx.fillStyle = C.textMain; ctx.font = '900 28px Nunito';
     ctx.fillText(score, 26, 54);
 
-    // Wickets (dots)
     for (let i = 0; i < MAX_WICKETS; i++) {
       ctx.fillStyle = i < wickets ? C.red : '#ddd8cc';
       ctx.beginPath(); ctx.arc(115 + i * 16, 28, 5.5, 0, Math.PI * 2); ctx.fill();
@@ -646,11 +593,9 @@
       ctx.stroke();
     }
 
-    // Ball count
     ctx.fillStyle = C.textMuted; ctx.font = '700 11px Nunito'; ctx.textAlign = 'right';
     ctx.fillText('Ball ' + balls, 170, 55);
 
-    // High score — top right
     ctx.fillStyle = C.scoreBg; ctx.strokeStyle = C.panelStroke; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.roundRect(W - 115, 10, 100, 36, 10); ctx.fill(); ctx.stroke();
 
@@ -659,7 +604,6 @@
     ctx.fillStyle = C.textMain; ctx.font = '900 16px Nunito';
     ctx.fillText(highScore, W - 107, 42);
 
-    // Difficulty indicator
     ctx.fillStyle = C.scoreBg; ctx.strokeStyle = C.panelStroke; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.roundRect(W - 115, 52, 100, 18, 6); ctx.fill(); ctx.stroke();
     ctx.fillStyle = C.textMuted; ctx.font = '700 9px Nunito'; ctx.textAlign = 'center';
@@ -667,7 +611,6 @@
     ctx.fillText('⚡ ' + lvlLabel, W - 65, 64);
   }
 
-  /* ─── Particles ──────────────────────────────────────────── */
   function spawnDust(cx, cy, count) {
     for (let i = 0; i < count; i++) {
       particles.push({
@@ -731,7 +674,6 @@
       ctx.globalAlpha = p.alpha;
 
       if (p.type === 'sparkle') {
-        // 4-pointed star
         ctx.fillStyle = p.color;
         ctx.translate(p.x, p.y);
         ctx.rotate(frame * 0.1 + i);
@@ -762,16 +704,13 @@
       const ft = floatingText[i];
       ft.t += 0.018;
 
-      // Spring animation for Y position
       const springY = springEase(Math.min(ft.t * 2, 1));
       ft.y = ft.startY - springY * (ft.big ? 65 : 45);
 
-      // Fade out after peak
       ft.alpha = ft.t > 0.5 ? Math.max(0, 1 - (ft.t - 0.5) * 2) : 1;
 
       if (ft.alpha <= 0) { floatingText.splice(i, 1); continue; }
 
-      // Scale with spring
       const scale = ft.big
         ? 1.0 + springEase(Math.min(ft.t * 3, 1)) * 0.5
         : 0.8 + springEase(Math.min(ft.t * 3, 1)) * 0.3;
@@ -784,7 +723,6 @@
       ctx.font = ft.big ? '900 36px Nunito' : '800 22px Nunito';
       ctx.textAlign = 'center';
 
-      // Outlined text
       ctx.strokeStyle = C.white;
       ctx.lineWidth = 5;
       ctx.strokeText(ft.text, 0, 0);
@@ -795,12 +733,10 @@
     }
   }
 
-  /* ─── Title Screen ───────────────────────────────────────── */
   function drawTitle() {
     ctx.fillStyle = 'rgba(232,240,224,0.88)';
     ctx.fillRect(0, 0, W, H);
 
-    // Google-colored bouncy title
     const title = 'CRICKET';
     const colors = [C.blue, C.red, C.yellow, C.blue, C.green, C.red, C.yellow];
     ctx.font = '900 68px Nunito'; ctx.textAlign = 'center';
@@ -823,12 +759,10 @@
     ctx.fillStyle = C.textMain;
     ctx.fillText('🏏  Doodle Cricket  🏏', W / 2, 205);
 
-    // Instructions
     ctx.font = '700 14px Nunito'; ctx.fillStyle = C.textMuted;
     ctx.fillText('Time the needle in the green zone to score runs!', W / 2, 245);
-    ctx.fillText('Click, Tap, or press Space to bat.', W / 2, 268);
+    ctx.fillText('Tap anywhere or press Space to bat.', W / 2, 268);
 
-    // Meter preview (mini)
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = C.meterBg;
     ctx.beginPath(); ctx.roundRect(W/2 - 80, 284, 160, 10, 5); ctx.fill();
@@ -838,7 +772,6 @@
     ctx.beginPath(); ctx.roundRect(W/2 - 16, 285, 32, 8, 4); ctx.fill();
     ctx.globalAlpha = 1;
 
-    // Play button
     const btnW = 190, btnH = 50, btnX = W / 2 - btnW / 2, btnY = 310;
     const pulse = 1 + Math.sin(frame * 0.06) * 0.025;
 
@@ -859,7 +792,6 @@
     ctx.fillText('A doodle tribute to cricket', W / 2, H - 16);
   }
 
-  /* ─── Game Over ──────────────────────────────────────────── */
   function drawGameOver() {
     ctx.fillStyle = 'rgba(232,240,224,0.90)';
     ctx.fillRect(0, 0, W, H);
@@ -919,7 +851,6 @@
   }
 
   function calcDifficulty() {
-    // Increase difficulty every 10 runs
     difficulty = 1 + Math.floor(score / 10);
   }
 
@@ -936,12 +867,10 @@
     state = 'BOWLING';
     balls++;
 
-    // Bowler reset
     bowler.runY = 0;
     bowler.phase = 'RUNNING';
     bowler.deliveryFrame = 0;
 
-    // Ball speed increases with difficulty
     const speedMult = 1 + (difficulty - 1) * 0.15;
     const lineVar = rand(-1.0, 1.0);
 
@@ -961,7 +890,6 @@
 
     bat.swinging = false; bat.swingT = 0; bat.impactFlash = 0;
 
-    // Timing meter reset
     meter.active = true;
     meter.pos = 0;
     meter.dir = 1;
@@ -979,24 +907,14 @@
     if (state === 'GAMEOVER') { resetGame(); return; }
     if (state !== 'BOWLING' || bat.swinging || !ball.active) return;
 
-    // Freeze meter needle
     meter.active = false;
     meter.frozenPos = meter.pos;
-    meter.frozenTimer = 90; // show frozen position briefly
+    meter.frozenTimer = 90;
 
     bat.swinging = true;
     bat.swingT = 0;
 
-    // Determine result from meter zone
     const zone = getMeterZone(meter.pos);
-
-    // Also need ball to be past halfway (can't swing before ball arrives)
-    const ballProgress = (ball.y - PITCH_TOP) / (GROUND_Y - PITCH_TOP);
-    if (ballProgress < 0.35) {
-      // Swung way too early — complete miss, ball still coming
-      // Let swing animate but don't register as hit yet
-      // Actually, treat as bad timing
-    }
 
     ball.hit = true;
     sfxCrack();
@@ -1017,11 +935,9 @@
       bat.impactFlash = 1;
       lastResult = 'SIX';
 
-      // Fielders look up
       fielders.forEach(f => { f.anim = 'IDLE'; });
 
     } else if (zone === 'GOOD') {
-      // Distinguish closer-to-perfect = 4, farther = 1 or 2
       const distFromCenter = Math.abs(meter.pos - 0.5);
       if (distFromCenter <= 0.20) {
         runs = 4;
@@ -1034,7 +950,6 @@
         bat.impactFlash = 0.6;
         lastResult = 'FOUR';
 
-        // Nearest fielder dives
         let nearest = 0, nearDist = Infinity;
         fielders.forEach((f, i) => {
           const d = Math.hypot(f.x - (ball.x + ball.vx * 15), f.y - (ball.y + ball.vy * 15));
@@ -1053,21 +968,18 @@
         lastResult = '' + runs;
         spawnDust(BATSMAN_X + 5, BATSMAN_Y + 5, 8);
 
-        // Fielder moves to intercept
         const fi = Math.floor(Math.random() * fielders.length);
         fielders[fi].tx = fielders[fi].x + ball.vx * 6;
         fielders[fi].ty = fielders[fi].y + ball.vy * 4;
       }
 
     } else {
-      // BAD timing = OUT
       runs = 0;
       wickets++;
       lastResult = 'OUT';
       resultColor = C.red;
       sfxOut();
 
-      // Determine out type: if early swing → caught, if late → bowled look
       if (meter.pos < 0.3) {
         resultText = 'Caught! 😵';
         ball.vy = -3; ball.vx = rand(-5, 5);
@@ -1076,7 +988,6 @@
         ball.vy = -2; ball.vx = rand(-4, 4);
       }
 
-      // Fielder celebrates
       fielders.forEach(f => { f.anim = 'IDLE'; });
     }
 
@@ -1090,7 +1001,6 @@
     resultTimer = 100;
     state = 'RESULT';
 
-    // Schedule next
     setTimeout(() => {
       fielders.forEach((f, i) => {
         f.tx = fielderDefs[i].homeX;
@@ -1106,7 +1016,6 @@
     meter.active = false;
   }
 
-  /* ─── Ball physics ───────────────────────────────────────── */
   function updateBall() {
     if (!ball.active) return;
 
@@ -1115,18 +1024,15 @@
       ball.x += ball.vx;
       ball.radius = 4 + (ball.y / H) * 5;
 
-      // Bounce on pitch
       if (ball.y >= ball.bounceY && !ball.bounced) {
         ball.bounced = true;
-        ball.squash = 0.6;    // squash on bounce
+        ball.squash = 0.6;
         sfxBounce();
         spawnDust(ball.x, ball.y, 6);
       }
 
-      // Squash recovery
       ball.squash = lerp(ball.squash, 1, 0.12);
 
-      // Shadow depth: ball appears to rise after bounce
       if (ball.bounced) {
         const distAfterBounce = ball.y - ball.bounceY;
         ball.heightOffset = Math.max(0, Math.sin(distAfterBounce * 0.03) * 20);
@@ -1136,10 +1042,8 @@
       ball.trail.push({ x: ball.x, y: ball.y });
       if (ball.trail.length > 10) ball.trail.shift();
 
-      // Ball passed batsman without being hit
       if (ball.y >= PITCH_BOT + 5 && !ball.hit) {
         ball.active = false;
-        // Bowled or dot
         if (Math.abs(ball.x - 400) < 16) {
           wickets++;
           lastResult = 'BOWLED';
@@ -1160,15 +1064,13 @@
         }, 1800);
       }
     } else {
-      // Post-hit trajectory (exaggerated gravity for fun)
       ball.x += ball.vx;
       ball.y += ball.vy;
-      ball.vy += 0.15; // slightly exaggerated
+      ball.vy += 0.15;
       ball.radius = Math.max(2, ball.radius - 0.04);
 
-      // Stretch when moving fast upward
       if (ball.vy < -4) {
-        ball.squash = 1.3; // stretch vertically
+        ball.squash = 1.3;
       } else {
         ball.squash = lerp(ball.squash, 1, 0.08);
       }
@@ -1182,7 +1084,6 @@
     }
   }
 
-  /* ─── Bowler logic ───────────────────────────────────────── */
   function updateBowler() {
     if (bowler.phase === 'RUNNING') {
       bowler.runY += 2.2;
@@ -1198,7 +1099,6 @@
     }
   }
 
-  /* ─── Bat logic ──────────────────────────────────────────── */
   function updateBat() {
     bat.idleBob += 0.04;
     if (bat.swinging) {
@@ -1211,7 +1111,6 @@
     if (bat.impactFlash > 0) bat.impactFlash -= 0.03;
   }
 
-  /* ─── Meter logic ────────────────────────────────────────── */
   function updateMeter() {
     if (!meter.active) {
       if (meter.frozenTimer > 0) meter.frozenTimer--;
@@ -1222,7 +1121,6 @@
     if (meter.pos <= 0) { meter.pos = 0; meter.dir = 1; }
   }
 
-  /* ─── Result timer ───────────────────────────────────────── */
   function updateResultTimer() {
     if (resultTimer > 0) resultTimer--;
     else if (state !== 'TITLE' && state !== 'GAMEOVER') lastResult = '';
@@ -1236,7 +1134,6 @@
     frame++;
 
     ctx.save();
-    // Screen shake
     if (shakeTimer > 0) {
       shakeTimer--;
       const intensity = shakeIntensity * (shakeTimer / 15);
@@ -1245,7 +1142,6 @@
 
     ctx.clearRect(0, 0, W, H);
 
-    // ── Draw world ──
     drawSky();
     drawClouds();
     drawGround();
@@ -1255,26 +1151,22 @@
     drawBall();
     drawBatsman();
 
-    // ── Effects ──
     updateAndDrawParticles();
     updateAndDrawFloatingText();
 
-    // ── UI layers ──
     drawHUD();
     drawTimingMeter();
 
-    // ── Overlays ──
     if (state === 'TITLE')    drawTitle();
     if (state === 'GAMEOVER') drawGameOver();
 
     ctx.restore();
 
-    // ── Logic updates ──
     if (state === 'BOWLING') {
       updateBall();
       updateBowler();
     } else if (state === 'RESULT') {
-      updateBall(); // continue ball trajectory after hit
+      updateBall();
     }
     updateBat();
     updateMeter();
@@ -1283,10 +1175,29 @@
     requestAnimationFrame(loop);
   }
 
-  /* ─── Input ──────────────────────────────────────────────── */
-  canvas.addEventListener('pointerdown', (e) => { e.preventDefault(); triggerSwing(); });
+  /* ─── Touch & Input Handlers ─────────────────────────────── */
+  const handleAction = (e) => {
+    if (e) e.preventDefault();
+    triggerSwing();
+  };
+
+  // Canvas Touch & Mouse Pointer
+  canvas.addEventListener('pointerdown', handleAction);
+  canvas.addEventListener('touchstart', handleAction, { passive: false });
+
+  // On-Screen Touch Swing Button
+  const mobileBtn = document.getElementById('mobileSwingBtn');
+  if (mobileBtn) {
+    mobileBtn.addEventListener('pointerdown', handleAction);
+    mobileBtn.addEventListener('touchstart', handleAction, { passive: false });
+  }
+
+  // Keyboard Space / Enter
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); triggerSwing(); }
+    if (e.code === 'Space' || e.code === 'Enter') {
+      e.preventDefault();
+      triggerSwing();
+    }
   });
 
   /* ─── Boot ───────────────────────────────────────────────── */
