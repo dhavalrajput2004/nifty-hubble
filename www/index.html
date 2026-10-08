@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  
+  <!-- Mobile & PWA Standards -->
+  <title>Cricket Doodle Arcade 🏏</title>
+  <meta name="description" content="A fun timing-based Google Doodle style cricket arcade game.">
+  <meta name="theme-color" content="#4285f4">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CricketDoodle">
+
+  <!-- App Icons & Manifest -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap');
+    
+    * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box; 
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #e8f0e0;
+      font-family: 'Nunito', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    #app-container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      position: relative;
+    }
+
+    #gameCanvas {
+      cursor: pointer;
+      touch-action: none;
+      border-radius: 14px;
+      box-shadow: 0 8px 30px rgba(50, 40, 20, 0.15);
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+    }
+
+    /* On-screen Mobile Touch Swing Overlay Button (For Easy Thumb Play) */
+    #mobileSwingBtn {
+      position: absolute;
+      bottom: calc(20px + env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%);
+      width: clamp(220px, 80vw, 360px);
+      height: 54px;
+      background: #34a853;
+      color: #ffffff;
+      font-family: 'Nunito', sans-serif;
+      font-size: 20px;
+      font-weight: 900;
+      border: 3px solid #3b3022;
+      border-radius: 28px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+      display: none; /* Auto-shown on touch devices */
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      z-index: 100;
+      cursor: pointer;
+      active: scale(0.96);
+    }
+  </style>
+</head>
+<body>
+  <div id="app-container">
+    <canvas id="gameCanvas"></canvas>
+    <button id="mobileSwingBtn" aria-label="Swing Bat">
+      <span>⚡ TAP TO BAT</span>
+    </button>
+  </div>
+
+  <script src="game.js"></script>
+
+  <!-- PWA Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('SW registered:', reg.scope))
+          .catch(err => console.log('SW failed:', err));
+      });
+    }
+
+    // Detect Touch Device to display Mobile Swing Button
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+      const btn = document.getElementById('mobileSwingBtn');
+      if (btn) btn.style.display = 'flex';
+    }
+  </script>
+</body>
+</html>

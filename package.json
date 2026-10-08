@@ -2,12 +2,12 @@
   "name": "cricket-doodle-arcade",
   "version": "1.0.0",
   "description": "Cricket Doodle Arcade - Mobile Game",
-  "main": "index.html",
+  "main": "build.js",
   "scripts": {
-    "start": "npx serve -l 8080",
-    "cap:init": "npx cap init",
-    "cap:add": "npx cap add android",
-    "cap:sync": "npx cap sync",
+    "build": "node build.js",
+    "start": "node build.js && npx serve www -l 8080",
+    "cap:add": "npm run build && npx cap add android",
+    "cap:sync": "npm run build && npx cap sync",
     "cap:open": "npx cap open android"
   },
   "keywords": [

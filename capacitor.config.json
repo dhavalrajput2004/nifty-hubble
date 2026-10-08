@@ -1,8 +1,7 @@
 {
   "appId": "com.dhavalrajput.cricketdoodle",
   "appName": "Cricket Doodle Arcade",
-  "webDir": ".",
-  "bundledWebRuntime": false,
+  "webDir": "www",
   "android": {
     "allowMixedContent": false,
     "captureInput": true,
